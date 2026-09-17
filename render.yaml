@@ -1,0 +1,46 @@
+# Render Blueprint Specification for AI Study Companion
+services:
+  # Backend API Web Service
+  - type: web
+    name: ai-study-companion-backend
+    env: node
+    plan: starter # Starter plan allows persistent disk mount for PDF durability
+    buildCommand: npm --prefix backend install && npm --prefix backend run prisma:generate && npm --prefix backend run build
+    startCommand: npm --prefix backend run prisma:deploy && npm --prefix backend run start
+    disk:
+      name: uploads-storage
+      mountPath: /app/uploads
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DATABASE_URL
+        sync: false # Set securely in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true # Generates secure random 256-bit key automatically
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: GEMINI_API_KEY
+        sync: false # Set securely in Render dashboard
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: FRONTEND_URL
+        sync: false # Set to frontend URL
+      - key: UPLOADS_DIR
+        value: /app/uploads
+
+  # Frontend Static Site
+  - type: web
+    name: ai-study-companion-frontend
+    env: static
+    buildCommand: npm --prefix frontend install && npm --prefix frontend run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false # Point to https://ai-study-companion-backend.onrender.com/api

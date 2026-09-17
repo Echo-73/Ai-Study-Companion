@@ -1,0 +1,291 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ProcessingStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  OPEN_ENDED
+}
+
+enum MasteryStatus {
+  IMPROVING
+  STABLE
+  REQUIRES_ATTENTION
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  RETRYING
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  spaces         Space[]
+  learningEvents LearningEvent[]
+  aiUsageLogs    AIUsageLog[]
+  aiEvaluations  AIEvaluation[]
+}
+
+model Space {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects Project[]
+}
+
+model Project {
+  id           String   @id @default(uuid())
+  spaceId      String
+  name         String
+  description  String?
+  learningGoal String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  space           Space            @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  materials       Material[]
+  concepts        Concept[]
+  conversations   Conversation[]
+  quizzes         Quiz[]
+  recommendations Recommendation[]
+  learningEvents  LearningEvent[]
+}
+
+model Material {
+  id           String           @id @default(uuid())
+  projectId    String
+  title        String
+  fileUrl      String?
+  fileType     String           @default("pdf")
+  status       ProcessingStatus @default(QUEUED)
+  errorMessage String?
+  pageCount    Int              @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chunks  MaterialChunk[]
+}
+
+model MaterialChunk {
+  id         String   @id @default(uuid())
+  materialId String
+  projectId  String
+  chunkIndex Int
+  content    String
+  pageNumber Int
+  tokenCount Int      @default(0)
+  embedding  Json?
+  createdAt  DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+}
+
+model Concept {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  masteryRecords MasteryRecord[]
+  questions      Question[]
+}
+
+model MasteryRecord {
+  id        String        @id @default(uuid())
+  conceptId String
+  score     Float
+  status    MasteryStatus @default(REQUIRES_ATTENTION)
+  evidence  String?
+  createdAt DateTime      @default(now())
+
+  concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  projectId String
+  title     String   @default("Tutor Session")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messages Message[]
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String
+  sender         String
+  content        String
+  citations      Json?
+  isSupported    Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Quiz {
+  id          String    @id @default(uuid())
+  projectId   String
+  title       String
+  description String?
+  score       Float?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  questions   Question[]
+  assessments Assessment[]
+}
+
+model Question {
+  id            String       @id @default(uuid())
+  quizId        String
+  conceptId     String?
+  type          QuestionType
+  prompt        String
+  options       Json?
+  correctAnswer String?
+  difficulty    Float        @default(0.5)
+  createdAt     DateTime     @default(now())
+
+  quiz      Quiz               @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  concept   Concept?           @relation(fields: [conceptId], references: [id], onDelete: SetNull)
+  responses QuestionResponse[]
+}
+
+model QuestionResponse {
+  id           String   @id @default(uuid())
+  questionId   String
+  userResponse String
+  isCorrect    Boolean?
+  score        Float?
+  feedback     String?
+  evaluatedAt  DateTime @default(now())
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model Assessment {
+  id                 String   @id @default(uuid())
+  quizId             String
+  overallScore       Float
+  understandingScore Float
+  accuracyScore      Float
+  relevanceScore     Float
+  strengths          Json
+  missingConcepts    Json
+  improvementSummary String
+  evaluatedAt        DateTime @default(now())
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+model Recommendation {
+  id          String   @id @default(uuid())
+  projectId   String
+  title       String
+  actionText  String
+  reason      String
+  targetType  String
+  targetId    String?
+  isDismissed Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model LearningEvent {
+  id             String   @id @default(uuid())
+  userId         String
+  projectId      String
+  eventType      String
+  metadata       Json
+  idempotencyKey String?  @unique
+  timestamp      DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model AIUsageLog {
+  id               String   @id @default(uuid())
+  requestId        String   @unique @default(uuid())
+  userId           String?
+  projectId        String?
+  feature          String
+  model            String
+  latencyMs        Int
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  estimatedCost    Float    @default(0.0)
+  success          Boolean  @default(true)
+  retrievalCount   Int      @default(0)
+  retrievedSources Json?
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model AIEvaluation {
+  id                 String   @id @default(uuid())
+  userId             String?
+  feature            String
+  groundednessScore  Float
+  relevanceScore     Float
+  citationAccuracy   Float
+  unsupportedHandled Boolean
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model BackgroundJob {
+  id             String    @id @default(uuid())
+  type           String
+  status         JobStatus @default(QUEUED)
+  payload        Json
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  errorMessage   String?
+  idempotencyKey String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
