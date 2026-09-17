@@ -19,6 +19,8 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false # Set securely in Render dashboard
+      - key: DIRECT_DATABASE_URL
+        sync: false # Set securely in Render dashboard (Neon direct/non-pooler URL for migrations)
       - key: JWT_SECRET
         generateValue: true # Generates secure random 256-bit key automatically
       - key: JWT_EXPIRES_IN
