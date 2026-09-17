@@ -1,19 +1,33 @@
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import { Request, Response, NextFunction } from 'express';
 import { AppError } from './errorHandler';
+import { storageService } from '../services/storageService';
 
-const uploadDir = process.env.UPLOADS_DIR
-  ? path.resolve(process.env.UPLOADS_DIR)
-  : path.join(__dirname, '../../../uploads');
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+/**
+ * Middleware guard that verifies persistent storage is configured before processing uploads.
+ * On Render Free (production without external object storage), it returns HTTP 503 instead of crashing
+ * or silently storing files on an ephemeral filesystem.
+ */
+export const requirePersistentStorage = (req: Request, _res: Response, next: NextFunction): void => {
+  if (!storageService.isPersistentStorageConfigured()) {
+    return next(
+      new AppError(
+        'Persistent PDF storage is not configured in this deployment. File uploads are disabled on Render Free.',
+        503
+      )
+    );
+  }
+  next();
+};
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
+    try {
+      const dir = storageService.ensureLocalStorageDir();
+      cb(null, dir);
+    } catch (err: any) {
+      cb(err, '');
+    }
   },
   filename: (_req, _file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -32,3 +46,4 @@ export const upload = multer({
     }
   },
 });
+

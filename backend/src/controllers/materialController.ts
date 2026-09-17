@@ -2,10 +2,18 @@ import { Response, NextFunction } from 'express';
 import { materialService } from '../services/materialService';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { AppError } from '../middleware/errorHandler';
+import { storageService } from '../services/storageService';
 
 export class MaterialController {
   async uploadMaterial(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      if (!storageService.isPersistentStorageConfigured()) {
+        throw new AppError(
+          'Persistent PDF storage is not configured in this deployment. File uploads are disabled on Render Free.',
+          503
+        );
+      }
+
       const userId = req.user!.userId;
       const projectId = (req.params.projectId || req.body.projectId) as string;
       const title = req.body.title || (req.file ? req.file.originalname : 'Uploaded Material');

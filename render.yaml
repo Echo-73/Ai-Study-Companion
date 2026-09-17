@@ -4,14 +4,10 @@ services:
   - type: web
     name: ai-study-companion-backend
     env: node
-    plan: starter # Starter plan allows persistent disk mount for PDF durability
+    plan: free # Render Free tier
     healthCheckPath: /api/health
     buildCommand: npm --prefix backend install --include=dev && npm --prefix backend run prisma:generate && npm --prefix backend run build
     startCommand: npm --prefix backend run prisma:deploy && npm --prefix backend run start
-    disk:
-      name: uploads-storage
-      mountPath: /var/data/uploads
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: 20
@@ -31,8 +27,6 @@ services:
         value: gemini-3.6-flash
       - key: FRONTEND_URL
         sync: false # Set to frontend URL
-      - key: UPLOADS_DIR
-        value: /var/data/uploads
 
   # Frontend Static Site
   - type: web

@@ -56,4 +56,23 @@ describe('PDF Material Processing Integration Tests', () => {
     expect(statusRes.body.success).toBe(true);
     expect(['QUEUED', 'PROCESSING', 'READY']).toContain(statusRes.body.data.status);
   });
+
+  it('POST /api/projects/:projectId/materials/upload should return 503 when storage is disabled (production mode)', async () => {
+    const prevEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'production';
+
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/materials/upload`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ title: 'Production Upload Attempt' });
+
+      expect(res.status).toBe(503);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toContain('Persistent PDF storage is not configured');
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+    }
+  });
 });
+
