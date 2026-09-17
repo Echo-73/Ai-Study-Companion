@@ -3,13 +3,17 @@ import { materialService } from '../services/materialService';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { AppError } from '../middleware/errorHandler';
 import { storageService } from '../services/storageService';
+import { logger } from '../config/logger';
 
 export class MaterialController {
   async uploadMaterial(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    let fileUrl: string | undefined = undefined;
+
     try {
-      if (!storageService.isPersistentStorageConfigured()) {
+      const status = storageService.getStorageStatus();
+      if (!status.configured) {
         throw new AppError(
-          'Persistent PDF storage is not configured in this deployment. File uploads are disabled on Render Free.',
+          status.message || 'Persistent PDF storage is not configured in this deployment. File uploads are disabled.',
           503
         );
       }
@@ -17,17 +21,26 @@ export class MaterialController {
       const userId = req.user!.userId;
       const projectId = (req.params.projectId || req.body.projectId) as string;
       const title = req.body.title || (req.file ? req.file.originalname : 'Uploaded Material');
-      const filePath = req.file ? req.file.path : undefined;
 
       if (!projectId) {
         throw new AppError('projectId is required', 400);
+      }
+
+      if (req.file) {
+        const saved = await storageService.saveFile({
+          projectId,
+          originalName: req.file.originalname,
+          buffer: req.file.buffer,
+          mimeType: req.file.mimetype,
+        });
+        fileUrl = saved.fileUrl;
       }
 
       const result = await materialService.uploadAndEnqueue({
         userId,
         projectId,
         title,
-        filePath,
+        fileUrl,
       });
 
       res.status(202).json({
@@ -39,6 +52,14 @@ export class MaterialController {
         },
       });
     } catch (error) {
+      if (fileUrl) {
+        try {
+          await storageService.deleteFile(fileUrl);
+          logger.info(`Cleaned up uploaded storage file after downstream error: ${fileUrl}`);
+        } catch (cleanupError: any) {
+          logger.error(`Failed to clean up uploaded storage object (${fileUrl}):`, cleanupError);
+        }
+      }
       next(error);
     }
   }

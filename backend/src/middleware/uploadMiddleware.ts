@@ -5,14 +5,15 @@ import { storageService } from '../services/storageService';
 
 /**
  * Middleware guard that verifies persistent storage is configured before processing uploads.
- * On Render Free (production without external object storage), it returns HTTP 503 instead of crashing
- * or silently storing files on an ephemeral filesystem.
+ * On Render Free (production without S3 object storage), it returns HTTP 503 with a clear message
+ * instead of crashing or silently storing files on an ephemeral filesystem.
  */
-export const requirePersistentStorage = (req: Request, _res: Response, next: NextFunction): void => {
-  if (!storageService.isPersistentStorageConfigured()) {
+export const requirePersistentStorage = (_req: Request, _res: Response, next: NextFunction): void => {
+  const status = storageService.getStorageStatus();
+  if (!status.configured) {
     return next(
       new AppError(
-        'Persistent PDF storage is not configured in this deployment. File uploads are disabled on Render Free.',
+        status.message || 'Persistent PDF storage is not configured in this deployment. File uploads are disabled.',
         503
       )
     );
@@ -20,23 +21,8 @@ export const requirePersistentStorage = (req: Request, _res: Response, next: Nex
   next();
 };
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    try {
-      const dir = storageService.ensureLocalStorageDir();
-      cb(null, dir);
-    } catch (err: any) {
-      cb(err, '');
-    }
-  },
-  filename: (_req, _file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `doc-${uniqueSuffix}.pdf`);
-  },
-});
-
 export const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB limit
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
@@ -46,4 +32,3 @@ export const upload = multer({
     }
   },
 });
-

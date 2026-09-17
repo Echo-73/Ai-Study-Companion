@@ -10,9 +10,9 @@ export interface PDFProcessResult {
 }
 
 export class PDFProcessor {
-  async extractText(filePath: string): Promise<PDFProcessResult> {
+  async extractText(input: string | Buffer): Promise<PDFProcessResult> {
     try {
-      const dataBuffer = fs.readFileSync(filePath);
+      const dataBuffer = Buffer.isBuffer(input) ? input : fs.readFileSync(input);
 
       const pages: PageText[] = [];
 
@@ -58,7 +58,8 @@ export class PDFProcessor {
         pages,
       };
     } catch (error) {
-      logger.error(`PDF Extraction failed for file ${filePath}:`, error);
+      const source = Buffer.isBuffer(input) ? '[Memory Buffer]' : input;
+      logger.error(`PDF Extraction failed for ${source}:`, error);
       throw error;
     }
   }

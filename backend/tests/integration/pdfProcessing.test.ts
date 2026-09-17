@@ -2,6 +2,7 @@ import request from 'supertest';
 import { app } from '../../src/app';
 import { prisma } from '../../src/config/prisma';
 import { hashPassword, generateToken } from '../../src/utils/authUtils';
+import { pdfProcessor } from '../../src/services/pdfProcessor';
 
 describe('PDF Material Processing Integration Tests', () => {
   let userToken = '';
@@ -29,6 +30,8 @@ describe('PDF Material Processing Integration Tests', () => {
   });
 
   afterAll(async () => {
+    await new Promise((r) => setTimeout(r, 800));
+    jest.restoreAllMocks();
     if (userId) await prisma.user.deleteMany({ where: { id: userId } });
     await prisma.$disconnect();
   });
@@ -73,6 +76,29 @@ describe('PDF Material Processing Integration Tests', () => {
     } finally {
       process.env.NODE_ENV = prevEnv;
     }
+  });
+
+  it('POST /api/projects/:projectId/materials/upload should handle real multipart PDF file upload in local mode', async () => {
+    const spy = jest.spyOn(pdfProcessor, 'extractText').mockResolvedValueOnce({
+      pageCount: 1,
+      pages: [{ pageNumber: 1, text: 'Attached sample text content' }],
+      text: 'Attached sample text content',
+    });
+
+    const samplePdfBuffer = Buffer.from(
+      '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 3 3]>>endobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n149\n%%EOF\n'
+    );
+
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/materials/upload`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .field('title', 'Attached Local Document')
+      .attach('file', samplePdfBuffer, 'sample.pdf');
+
+    expect(res.status).toBe(202);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.material.id).toBeDefined();
+    expect(res.body.data.material.title).toBe('Attached Local Document');
   });
 });
 

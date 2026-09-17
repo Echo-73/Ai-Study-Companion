@@ -4,6 +4,7 @@ import { pdfProcessor } from './pdfProcessor';
 import { chunkPageTexts } from '../utils/chunker';
 import { embeddingService } from './embeddingService';
 import { learningEventRepository } from '../repositories/learningEventRepository';
+import { storageService } from './storageService';
 import { prisma } from '../config/prisma';
 import { ProcessingStatus } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
@@ -18,12 +19,15 @@ export class MaterialService {
     userId: string;
     projectId: string;
     title: string;
+    fileUrl?: string;
     filePath?: string;
   }) {
+    const fileRef = data.fileUrl || data.filePath || null;
+
     const material = await materialRepository.create({
       projectId: data.projectId,
       title: data.title,
-      fileUrl: data.filePath || null,
+      fileUrl: fileRef,
     });
 
     await learningEventRepository.record({
@@ -36,7 +40,8 @@ export class MaterialService {
     const payloadRecord: Record<string, any> = {
       materialId: material.id,
       projectId: data.projectId,
-      filePath: data.filePath || null,
+      fileUrl: fileRef,
+      filePath: fileRef, // preserve for backward compatibility
       userId: data.userId,
     };
 
@@ -52,10 +57,12 @@ export class MaterialService {
   async processMaterialJob(payload: {
     materialId: string;
     projectId: string;
+    fileUrl?: string | null;
     filePath?: string | null;
     userId: string;
   }): Promise<void> {
-    const { materialId, projectId, filePath, userId } = payload;
+    const { materialId, projectId, userId } = payload;
+    const fileRef = payload.fileUrl || payload.filePath;
     logger.info(`Starting background processing for material ${materialId}`);
 
     await materialRepository.updateStatus(materialId, ProcessingStatus.PROCESSING);
@@ -75,8 +82,9 @@ export class MaterialService {
       let pages = [];
       let pageCount = 1;
 
-      if (filePath) {
-        const result = await pdfProcessor.extractText(filePath);
+      if (fileRef) {
+        const buffer = await storageService.getFileBuffer(fileRef);
+        const result = await pdfProcessor.extractText(buffer);
         pages = result.pages;
         pageCount = result.pageCount;
       } else {

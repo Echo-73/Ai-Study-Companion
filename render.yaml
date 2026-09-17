@@ -27,6 +27,16 @@ services:
         value: gemini-3.6-flash
       - key: FRONTEND_URL
         sync: false # Set to frontend URL
+      - key: S3_BUCKET
+        sync: false # Set securely in Render dashboard
+      - key: S3_REGION
+        value: us-east-1 # Or your S3/R2 region
+      - key: S3_ACCESS_KEY_ID
+        sync: false # Set securely in Render dashboard
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false # Set securely in Render dashboard
+      - key: S3_ENDPOINT
+        sync: false # Optional (for Cloudflare R2, MinIO, Supabase S3)
 
   # Frontend Static Site
   - type: web
