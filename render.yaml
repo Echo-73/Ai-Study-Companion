@@ -10,7 +10,7 @@ services:
     startCommand: npm --prefix backend run prisma:deploy && npm --prefix backend run start
     disk:
       name: uploads-storage
-      mountPath: /app/uploads
+      mountPath: /var/data/uploads
       sizeGB: 1
     envVars:
       - key: NODE_VERSION
@@ -30,7 +30,7 @@ services:
       - key: FRONTEND_URL
         sync: false # Set to frontend URL
       - key: UPLOADS_DIR
-        value: /app/uploads
+        value: /var/data/uploads
 
   # Frontend Static Site
   - type: web
