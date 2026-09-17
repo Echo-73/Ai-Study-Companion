@@ -11,13 +11,14 @@ const startServer = async () => {
 
     backgroundJobService.startWorker(3000);
 
-    const server = app.listen(env.PORT, () => {
+    const server = app.listen(Number(env.PORT), '0.0.0.0', () => {
       logger.info(`Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);
     });
 
     const shutdown = async () => {
       logger.info('Shutting down server gracefully...');
       backgroundJobService.stopWorker();
+
       server.close(async () => {
         await prisma.$disconnect();
         logger.info('Database disconnected. Process exited cleanly.');
